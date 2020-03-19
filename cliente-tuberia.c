@@ -9,12 +9,12 @@ Tuberias con nombre: programa para el cliente.
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
-#define FIFOCCNAME "servidor-hijo-cliente" // Nombre del archivo para enlace CC (Child-Client) (es un nombre de referencia solamente)
+#define FIFOCC "servidor-hijo-cliente" // Nombre del archivo para enlace CC (Child-Client)  (es un nombre de referencia solamente)
 
 int main (void){
 	int n,fd;
 	char buf[1024]; // Cadena de char usado para guardar lo que se escribe en el cliente.
-	if((fd=open(FIFOCCNAME,O_RDWR))<0){ // Se abre el archivo FIFO con permisos de lectura y escritura. Se guarda su descriptor de archivo (fd)
+	if((fd=open(FIFOCC,O_RDWR))<0){ // Se abre el archivo FIFO con permisos de lectura y escritura. Se guarda su descriptor de archivo (fd)
 		perror("open"); // Si falla, error
 		exit(1);
 	}
