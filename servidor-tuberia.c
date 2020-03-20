@@ -37,11 +37,10 @@ int main(void){
 		exit(1);
 	}
 
-	
-	printf("Jugador conectado! Resta uno mas...\n");
 	//Bloquear a cliente conectado mientras se espera
-	n = read(fd,buf,sizeof(buf));
+	//n = read(fd,buf,sizeof(buf)); //aun no leeremos de aqui, testeando clientes 1ro
 
+	printf("Iniciando servidor...");
 	for(i=1; i <= NUM_CLIENTES; i++) {
 
     	// Acciones hijos
@@ -118,7 +117,7 @@ int main(void){
 	while((n=read(fd,buf,sizeof(buf)))>0){ // Lee desde la tuberia los mensajes que va escribiendo el cliente, lo almacena en buf y retorna en número de bytes escritos
 		write(1,buf,n); // Escribe por pantalla los almacenado en buf (escribe n bytes).
 	}
-	
+
 	close(fd);
 	exit(0);
 }

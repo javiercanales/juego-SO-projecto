@@ -15,6 +15,7 @@ Tuberias con nombre: programa para el cliente.
 int main (void){
 	int n,fd;
 	char buf[1024]; // Cadena de char usado para guardar lo que se escribe en el cliente.
+	char latido[8] = "aviso"; // Para avisar conexion
 	
 	printf("Conectando en jugador 1...\n");
 	if((fd=open(FIFOC1,O_RDWR))<0){ // Se abre el archivo FIFO con permisos de lectura y escritura. Se guarda su descriptor de archivo (fd)
@@ -29,6 +30,7 @@ int main (void){
 		}
 	}
     //chmod(FIFOC1, 0000);
+    write(fd,latido,sizeof(latido));
 
 	while((n=read(0,buf,sizeof(buf)))>0){ // Lee desde teclado el mensaje que se quiere enviar al servidor.
 		write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
