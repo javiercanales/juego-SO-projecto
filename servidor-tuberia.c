@@ -16,8 +16,8 @@
 */
 
 #define FIFONAME "myfifo" // Nombre que se le va a dar al archivo al ser creado. No necesariamente definirlo de esta forma, también puede ser con un string
-#define FIFOC1 "myfifo-cliente-1" // Nombre del archivo para enlace CC (Child-Client) (es un nombre de referencia únicamente)
-#define FIFOC2 "myfifo-cliente-2" // **
+#define FIFOC1 "myfifo-cliente-1" // Nombre del archivo para enlace cliente 1 (es un nombre de referencia únicamente)
+#define FIFOC2 "myfifo-cliente-2" // ** cliente 2
 #define NUM_CLIENTES 2
 
 int main(void){
@@ -50,13 +50,15 @@ int main(void){
 
 				case 0: //Cliente 1 (jugador 1)
 				    // Se abre la tuberia y espera por latido para detectar conexion
+				    // read()...
 				    chmod(FIFOC1, 0000); // Detectada conexion, se cambia permiso asignado a la tuberia, para que no entren mas clientes.
-				    matriz_1 = random();
+				    // Quiza sirva hacer el chmod 0000 en el cliente, habra que probar (seria mas eficiente para evitar errores)
+				    // matriz_1 = random();
 				    break;
 
 				case 1: //Cliente 2 (jugador 2)
-
-				    matriz_2 = random();
+                    // Espera conexion en la tuberia FIFOC2, la que será accedida solo despues que exista conexion en FIFOC1
+				    // matriz_2 = random();
 				    break;
 
 				default: exit(1);        
