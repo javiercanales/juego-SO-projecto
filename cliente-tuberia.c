@@ -9,7 +9,8 @@ Tuberias con nombre: programa para el cliente.
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdio.h>
-#define FIFOCC "servidor-hijo-cliente" // Nombre del archivo para enlace CC (Child-Client)  (es un nombre de referencia solamente)
+#define FIFOC1 "myfifo-cliente-1" // Nombre del archivo para enlace CC (Child-Client) (es un nombre de referencia únicamente)
+#define FIFOC2 "myfifo-cliente-2" // **
 
 int main (void){
 	int n,fd;
