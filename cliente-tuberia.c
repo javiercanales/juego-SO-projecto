@@ -39,20 +39,19 @@ int main (void){
 
     while((n = read(fd,buf,sizeof(buf)))>0) { // Lee mensajes desde el servidor, lo almacena en buf y retorna en número de bytes escritos
 
-		if(buf[0] == '$') { // Si es su turno (definimos el $ como 1er caracter para indicar turno)
+		if(buf[0] == '$') { // Si es su turno (definimos el $ para indicar turno)
+			
 			printf("Es su turno!, ingrese su eleccion --------\n")
-			// Acciones para mostrar matriz juego
+			// Acciones para mostrar matriz juego (substring? o identificar quizá)
 			n = read(0,buf,sizeof(buf)); // Lee desde teclado el mensaje que se quiere enviar al servidor.
             write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
-		} else {
 
+		} else { // Se envia la matriz de juego
+
+			write(1,buf,n); // Escribe por pantalla la matriz de juego.
 		}
+	}
 
-		write(1,buf,n); // Escribe por pantalla lo almacenado en buf (escribe n bytes).
-	}
-	while((n = read(0,buf,sizeof(buf)))>0) { // Lee desde teclado el mensaje que se quiere enviar al servidor.
-		write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
-	}
 	close(fd);
 	exit(0);
 }
