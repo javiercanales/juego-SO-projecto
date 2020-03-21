@@ -14,7 +14,7 @@ Tuberias con nombre: programa para el cliente.
 #define FIFOC2 "myfifo-cliente-2" // ** cliente 2
 
 int main (void){
-	int n,fd;
+	int n, fd, contador=0;
 	char buf[1024]; // Cadena de char usado para guardar lo que se escribe en el cliente.
 	
 	printf("Conectando en jugador 1...\n");
@@ -28,11 +28,12 @@ int main (void){
 			perror("open"); // Si falla, error
 			exit(1);
 		} else {
-			printf("Conexion lograda - Preparando...\n");
+			printf("Conexion lograda - Jugador 2 - Preparando...\n");
 			write(fd, "aqui-cliente", 12);
 		}
 	} else {
-		printf("Conexion lograda - Preparando...\n");
+		printf("Conexion lograda - Jugador 1 - Preparando...\n");
+		contador++;
 		write(fd, "aqui-cliente", 12);
 	}
     //chmod(FIFOC1, 0000);
@@ -40,15 +41,19 @@ int main (void){
     while((n = read(fd,buf,sizeof(buf)))>0) { // Lee mensajes desde el servidor, lo almacena en buf y retorna en número de bytes escritos
 
 		if(buf[0] == '$') { // Si es su turno (definimos el $ para indicar turno)
-			
-			printf("Es su turno!, ingrese su eleccion --------\n")
+
+			printf("Es su turno!, ingrese su eleccion --------\n");
 			// Acciones para mostrar matriz juego (substring? o identificar quizá)
 			n = read(0,buf,sizeof(buf)); // Lee desde teclado el mensaje que se quiere enviar al servidor.
             write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
 
-		} else { // Se envia la matriz de juego
+		} else { // Se envia la matriz de juego o un mensaje
 
 			write(1,buf,n); // Escribe por pantalla la matriz de juego.
+			if (contador == 1) {
+			    write(fd, "recibido", 8); // Avisa la primera vez
+			    contador--;
+		    }
 		}
 	}
 

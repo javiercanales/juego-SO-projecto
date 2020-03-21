@@ -59,26 +59,24 @@ int disparo(void){
 	return(d)
 }
 
-/* establece los barcos dentro de la matriz, luego genera espacios vacios*/
-int generar_mapa_inicial(int M[5][5]){
+/* genera espacios vacios, luego, establece los barcos dentro de la matriz*/
+void generar_mapa_inicial(int M[][5], int filas){
 	int r;
 	int k;
-	for(k=0;k<5;k++){
 
+	for(i=0;i<filas;i++){
+		for(j=0;j<5;j++){
+			M[i][j]=0;
+		}
+	}
+	for(k=0;k<filas;k++){
 		do{
 			r=rand() % 5;
 			k=rand() % 5;
-		}while(M[r][k]!=1);
+		} while(M[r][k]==1);
 		M[r][k]=1;
 	}
-	for(i=0;i<5;i++){
-		for(j=0;j<5;j++){
-			if(M[i][j]!=1){
-				M[i][j]=1;
-			}
-		}
-	}
-	return M;
+	return;
 }
 
 int recibir_disparo(int d[2]){

@@ -5,6 +5,7 @@
 #include <netinet/in.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
+#include <string.h>
 #define TRUE  1
 #define FALSE 0
 #define PUERTO 8080
