@@ -10,6 +10,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/wait.h> 
+#include <signal.h>
+#include <sys/sem.h> // Header de diferentes funciones para crear, operar y destruir semáforos
 /**
 * En este sistema se crean 3 tuberias, la primera, creada por el padre (con mkfifo(FIFONAME,0666))
 * La segunda y tercera, creadas por
@@ -27,14 +30,17 @@ struct sembuf v = {0, 1, SEM_UNDO}; // Estructura que define la operación atomi
 									// que 1 significa que se va a aumentar el contador del semáforo.
 void generar_mapa_inicial(char* M);
 void analizar(char* buffer, char* M, char* respuesta);
+void terminar1();
+void terminar2();
+static int fd, fd1, fd2;
 
 int main(void){
-	int n, fd, fd1, fd2, i, semid;
+	int n, i, semid;
 	char M1[25]; // Se simula matriz como arreglo de tamaño 5*5 = 25
 	char M2[25];
 
 	char buf[1024]; // Cadena de char usado para guardar lo que se recibe desde el cliente.
-	char respuesta[8] = " "; // Avisa HIT! o MISS!
+	char *respuesta = malloc(10); // Avisa HIT! o MISS!
 
 	unlink(FIFONAME); // Elimina "my-fifo" si existe.
 	unlink(FIFOC1); // Elimina "myfifo-cliente-1" si existe.
@@ -49,7 +55,7 @@ int main(void){
 													  // este caso, es privado, solo procesos de la misma jerarquia podrá visualizar el semáforo.
 													  // 1 significa la dimensión del arreglo que semáforos
 													  // El ultimo parametro da los permisos.
-
+    printf("check 1\n");
     if(semid < 0) { // Si no se pudo crear el arreglo, retorna un valor negativo
     	
         perror("semget"); exit(1);
@@ -58,7 +64,7 @@ int main(void){
 										  // el valor del contador (SETVAL) el valor 1.
         perror("semctl"); exit(1); // Si falla, retorna un valor negativo.
     }
-
+    printf("check 2\n");
     /**
     * Definicion de archivos que dan funcionamiento a la tuberia con nombre.
     * Esta tuberia comunica al padre con sus hijos gracias a la sincronización que ofrece
@@ -72,6 +78,8 @@ int main(void){
 		perror("open"); // Si falla, error
 		exit(1);
 	}
+	printf("check 3\n");
+
 	generar_mapa_inicial(M1); // Matriz jugador 1
 	generar_mapa_inicial(M2); // Matriz jugador 2
 
@@ -86,6 +94,7 @@ int main(void){
 				case 1: //Cliente 1 (jugador 1)
 
 				    printf("Iniciando conexion con jugadores --------\n");
+
 				    if(mkfifo(FIFOC1,0666)<0){ // Crea archivo "myfifo-cliente-1" con permisos 666, si no existe lo crea.
 		                perror("mkfifo"); // Si no se puede crear, imprime el error causado.
 		                exit(1);
@@ -94,6 +103,7 @@ int main(void){
 		                perror("open"); // Si falla, error
 		                exit(1);
 	                }
+	                signal(SIGINT, terminar1);
 
 				    n = read(fd1,buf,sizeof(buf)); // Se lee para detectar una conexion entrante (cliente) (un latido)
                     if(strcmp ("aqui-cliente", buf) == 0) { // Se evalua que el latido sea correcto 
@@ -105,7 +115,11 @@ int main(void){
 
 				    chmod(FIFOC1, 0000); // Una vez detectada conexion, se cambia permiso asignado a la tuberia, para que no entren mas clientes.
 				    // Quiza sirva hacer el chmod 0000 en el cliente, habra que probar (seria mas eficiente para evitar errores)
-				    
+				    /**
+				    * POR AQUI PODEMOS IR METIENDO SEÑALES PA AVISAR TURNOS
+				    * ONDA se definesignal(SIGALRM, cambioturno())
+				    * luego se llama alarm(1) pa detonar cambioturno().
+				    */
 				    n = read(fd,buf,sizeof(buf)); // Esperando respuesta proceso conexion cliente 2 (no debe ser critica porque debe estar en paralelo al otro proceso, esperando)
 				    
 	                printf("Iniciando control de partida 1v1 --------\n");
@@ -164,17 +178,22 @@ int main(void){
                     		write(fd1, "$", 1); // Avisa turno
                     		n = read(fd1,buf,sizeof(buf)); // Espera respuesta
 
-                    		respuesta = analizar(buf, M1);
+                    		analizar(buf, M1, respuesta);
                     		write(fd1, respuesta, sizeof(respuesta));
                     		n = read(fd1,buf,sizeof(buf)); // Espera latido
 
                     		write(fd1, M1, sizeof(M1)); // Envia matriz asignada
-                            write(fd, "$", 1); // Avisa cambio turno
+
+                            if(strcmp("ganador",respuesta) == 0){
+                    			write(fd, "derrota", 7); // Avisa derrota
+                    		} else {
+                    			write(fd, "$", 1); // Avisa cambio turno
+                    		}
                     	}
                     	else { // Sino, es aviso de ganador en contrincante
                     		write(fd1, "Has perdido!", 12);
                     		printf("Juego terminado. Finalizando...\n");
-                    		return;
+                    		return 0;
                     	}
 
 		                if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
@@ -195,6 +214,7 @@ int main(void){
 		                perror("open"); // Si falla, error
 		                exit(1);
 	                }
+	                signal(SIGINT, terminar2);
 
 				    n = read(fd2,buf,sizeof(buf)); // Se lee para detectar conexion entrante de cliente 2 (ocurrirá sólo cuando exista conexión en tuberia 1)
 				    if(strcmp ("aqui-cliente", buf) == 0) {
@@ -234,21 +254,27 @@ int main(void){
 		                    perror("semop p-wait"); exit(1);
                         }
 
-                        if (strcmp ("$"), buf) { // Si es aviso de nuevo turno
+                        if (strcmp ("$", buf) == 0) { // Si es aviso de nuevo turno
                     		write(fd2, "$", 1); // Avisa turno inicial
                     		n = read(fd2,buf,sizeof(buf)); // Espera respuesta
 
                     		analizar(buf, M2, respuesta);
                     		write(fd2, respuesta, sizeof(respuesta));
+
                     		n = read(fd2,buf,sizeof(buf)); // Espera latido
 
                     		write(fd2, M2, sizeof(M2)); // Envia matriz asignada
-                            write(fd, "$", 1); // Avisa cambio turno
+
+                    		if(strcmp("ganador",respuesta) == 0){
+                    			write(fd, "derrota", 7); // Avisa derrota
+                    		} else {
+                    			write(fd, "$", 1); // Avisa cambio turno
+                    		}
                     	}
                     	else { // Sino, es aviso de ganador en contrincante
                     		write(fd2, "Has perdido!", 12);
                     		printf("Juego terminado. Finalizando...\n");
-                    		return;
+                    		return 0;
                     	}
 
 		                if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
@@ -288,14 +314,14 @@ void generar_mapa_inicial(char *M){
 	for(k=0;k<5;k++){
 		do{
 			r=rand() % 25;
-		} while(M[r]=='-');
+		} while(M[r]=='B');
 		M[r]='B';
 	}
 	return;
 }
 /* analiza coordenadas en buffer enviadas por jugador*/
 void analizar(char* buffer, char* M, char* respuesta) {
-	int y, posicionM, i;
+	int y, posicionM, i, contador=0;
 	char a, b;
 	a = buffer[0];
 	b = buffer[1];
@@ -304,7 +330,8 @@ void analizar(char* buffer, char* M, char* respuesta) {
 	y = y--;
 
 	if(y>4 || y<0){
-		respuesta = "MISS!";
+		strcpy(respuesta, "MISS!");
+		free(respuesta); // libera memoria
 		return;
 	}
 
@@ -324,16 +351,40 @@ void analizar(char* buffer, char* M, char* respuesta) {
 		case 'e':
 		case 'E': posicionM = y + 20;
 		    break;    
-		default: respuesta = "MISS!";
+		default: strcpy(respuesta, "MISS!");
+		         free(respuesta); // libera memoria
 		    return;         
 	}
 
 	if (M[posicionM] == 'B') {
 		M[posicionM] = '-';
-		respuesta = "HIT!";
-		return;
+		strcpy(respuesta, "HIT!");
+		free(respuesta); // libera memoria
 	} else {
-		respuesta = "MISS!";
-		return;
+		strcpy(respuesta, "MISS!");
+		free(respuesta); // libera memoria
 	}
+
+	if(strcmp("HIT!", respuesta) == 0) {
+		for(i=0; i<25; i++){
+			if(M[i]=='B') {
+				contador++;
+			}
+		}
+		if(contador==0){
+			printf("Tenemos ganador!\n");
+			strcpy(respuesta, "MISS!");
+		    free(respuesta); // libera memoria
+		}
+	}
+}
+void terminar1(){
+	printf("Signal invocada, cerrando...\n");
+    close(fd1);
+	close(fd);
+}
+void terminar2(){
+	printf("Signal invocada, cerrando...\n");
+    close(fd2);
+	close(fd);
 }

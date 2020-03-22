@@ -54,7 +54,10 @@ int main (void){
 			write(1,buf,n); // Escribe por pantalla
 			write(fd,"listo",n); //
 
-		} else { // Se envia la matriz de juego o un mensaje
+		} else if (strcmp("ganador", buf) == 0){
+			printf("HIT ganador! Has ganado!\n");
+		}
+		else { // Se envia la matriz de juego o un mensaje
 
 			imprimirMatriz(buf);
 			if (contador == 1) {
@@ -70,8 +73,8 @@ int main (void){
 }
 
 void imprimirMatriz(char* M) {
-	int contador = 0;
-	for(i=0, i>25; i++){
+	int i, contador = 0;
+	for(i=0; i>25; i++){
 		contador++;
 		printf(" %c ", M[i]);
 		if(contador == 5 || contador == 10 || contador == 15 || contador == 20) {
