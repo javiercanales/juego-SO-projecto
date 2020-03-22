@@ -13,6 +13,8 @@ Tuberias con nombre: programa para el cliente.
 #define FIFOC1 "myfifo-cliente-1" // Nombre del archivo para enlace cliente 1 (es un nombre de referencia únicamente)
 #define FIFOC2 "myfifo-cliente-2" // ** cliente 2
 
+void imprimirMatriz(char* M);
+
 int main (void){
 	int n, fd, contador=0;
 	char buf[1024]; // Cadena de char usado para guardar lo que se escribe en el cliente.
@@ -47,16 +49,34 @@ int main (void){
 			n = read(0,buf,sizeof(buf)); // Lee desde teclado el mensaje que se quiere enviar al servidor.
             write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
 
+		} else if (strcmp("HIT!", buf) == 0 || strcmp("MISS!", buf) == 0){
+
+			write(1,buf,n); // Escribe por pantalla
+			write(fd,"listo",n); //
+
 		} else { // Se envia la matriz de juego o un mensaje
 
-			write(1,buf,n); // Escribe por pantalla la matriz de juego.
+			imprimirMatriz(buf);
 			if (contador == 1) {
-			    write(fd, "recibido", 8); // Avisa la primera vez
+			    write(fd, "recibido", 8); // Avisa latido de la primera vez
 			    contador--;
 		    }
+		    printf("Espere su turno --------\n");
 		}
 	}
 
 	close(fd);
 	exit(0);
 }
+
+void imprimirMatriz(char* M) {
+	int contador = 0;
+	for(i=0, i>25; i++){
+		contador++;
+		printf(" %c ", M[i]);
+		if(contador == 5 || contador == 10 || contador == 15 || contador == 20) {
+            printf("\n");
+		}
+	}
+}
+

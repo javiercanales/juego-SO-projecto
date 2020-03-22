@@ -25,13 +25,16 @@ struct sembuf p = {0, -1, SEM_UNDO}; // Estructura que define la operación atom
 									 // critica, automáticamente se liberar dicho recurso, esto para evitar deadlock (Ver clase 7)
 struct sembuf v = {0, 1, SEM_UNDO}; // Estructura que define la operación atomica sem_post(). Mismo caso que la operación anterior, con la diferencia
 									// que 1 significa que se va a aumentar el contador del semáforo.
-void generar_mapa_inicial(int M[][5], int filas);
+void generar_mapa_inicial(char* M);
+void analizar(char* buffer, char* M, char* respuesta);
 
 int main(void){
 	int n, fd, fd1, fd2, i, semid;
-	int M1[5][5];
-	int M2[5][5];
+	char M1[25]; // Se simula matriz como arreglo de tamaño 5*5 = 25
+	char M2[25];
+
 	char buf[1024]; // Cadena de char usado para guardar lo que se recibe desde el cliente.
+	char respuesta[8] = " "; // Avisa HIT! o MISS!
 
 	unlink(FIFONAME); // Elimina "my-fifo" si existe.
 	unlink(FIFOC1); // Elimina "myfifo-cliente-1" si existe.
@@ -69,8 +72,8 @@ int main(void){
 		perror("open"); // Si falla, error
 		exit(1);
 	}
-	generar_mapa_inicial(M1, 25); // Matriz jugador 1
-	generar_mapa_inicial(M2, 25); // Matriz jugador 2
+	generar_mapa_inicial(M1); // Matriz jugador 1
+	generar_mapa_inicial(M2); // Matriz jugador 2
 
 	printf("Iniciando servidor...\n");
 	for(i=1; i <= NUM_CLIENTES; i++) {
@@ -103,7 +106,7 @@ int main(void){
 				    chmod(FIFOC1, 0000); // Una vez detectada conexion, se cambia permiso asignado a la tuberia, para que no entren mas clientes.
 				    // Quiza sirva hacer el chmod 0000 en el cliente, habra que probar (seria mas eficiente para evitar errores)
 				    
-				    n = read(fd,buf,sizeof(buf)); // Esperando respuesta proceso conexion cliente 2 (no debe ser critica porque debe estar en paralelo al otro proceso)
+				    n = read(fd,buf,sizeof(buf)); // Esperando respuesta proceso conexion cliente 2 (no debe ser critica porque debe estar en paralelo al otro proceso, esperando)
 				    
 	                printf("Iniciando control de partida 1v1 --------\n");
                     printf("Sincronizando sistema --------");
@@ -111,8 +114,12 @@ int main(void){
                     write(fd1, M1, sizeof(M1)); // Envia matriz asignada
                     n = read(fd1, buf, sizeof(buf)); // Espera respuesta
                     write(fd1, "$", 1); // Avisa turno inicial
-                    n = read(fd1,buf,sizeof(buf)); // Vuelve a esperar respuesta (1er turno)
-                    // Se evalua respuesta, y se gestiona
+                    n = read(fd1, buf, sizeof(buf)); // Vuelve a esperar respuesta (1er turno)
+
+                    analizar(buf, M1, respuesta);
+                    write(fd1, respuesta, sizeof(respuesta));
+                    n = read(fd1, buf, sizeof(buf)); // Espera latido
+
                     write(fd1, M1, sizeof(M1)); // Envia matriz asignada
 
                     /** Sección crítica
@@ -124,12 +131,12 @@ int main(void){
 				    if(semop(semid, &p, 1) < 0) { // sem_wait()), ocupa el recurso y restringe operaciones en otros procesos (proceso conexion jugador 2)
 		                perror("semop p-wait"); exit(1);
                     }
-
                     write(fd, "$", 1); // Avisa cambio turno
 
                     if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
 		                perror("semop v-post"); exit(1);
 	                }
+	                sleep(1); // Se duerme 1s para sincronia tuberia fd
 	                /* Fin sección */
 
                     // QUIZÁ SEA NECESARIO USAR PEQUEÑOS WAIT BREVES (PAUSAS, STOP, ETC).
@@ -153,20 +160,27 @@ int main(void){
 		                    perror("semop p-wait"); exit(1);
                         }
 
-                        if (strcmp ("$"), buf) { // Si es aviso de nuevo turno
-                    		write(fd1, "$", 1); // Avisa turno inicial
+                        if (strcmp ("$", buf) == 0){ // Si es aviso de nuevo turno
+                    		write(fd1, "$", 1); // Avisa turno
                     		n = read(fd1,buf,sizeof(buf)); // Espera respuesta
-                    		// Se evalua respuesta, y se gestiona
+
+                    		respuesta = analizar(buf, M1);
+                    		write(fd1, respuesta, sizeof(respuesta));
+                    		n = read(fd1,buf,sizeof(buf)); // Espera latido
+
                     		write(fd1, M1, sizeof(M1)); // Envia matriz asignada
                             write(fd, "$", 1); // Avisa cambio turno
                     	}
                     	else { // Sino, es aviso de ganador en contrincante
-                    		// Aviso de ganador en jugador 2, informa derrota a jugador 1
+                    		write(fd1, "Has perdido!", 12);
+                    		printf("Juego terminado. Finalizando...\n");
+                    		return;
                     	}
 
 		                if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
 		                    perror("semop v-post"); exit(1);
 	                    }
+	                    sleep(1); // Se duerme 1s para sincronia tuberia fd
 	                    /* Fin sección */
 		            } while ((n = read(fd,buf,sizeof(buf)))>0); // Espera nuevo turno (aviso desde proceso conexion 2)
 				    break;
@@ -206,6 +220,7 @@ int main(void){
 		                perror("semop v-post"); exit(1);
 	                }
 	                /* Fin sección */
+	                sleep(1); // Se duerme 1s para sincronia tuberia fd
 
 	                n = read(fd, buf, sizeof(buf)); // Lee desde proceso conexion 1
                     do { 
@@ -222,17 +237,24 @@ int main(void){
                         if (strcmp ("$"), buf) { // Si es aviso de nuevo turno
                     		write(fd2, "$", 1); // Avisa turno inicial
                     		n = read(fd2,buf,sizeof(buf)); // Espera respuesta
-                    		// Se evalua respuesta, y se gestiona
+
+                    		analizar(buf, M2, respuesta);
+                    		write(fd2, respuesta, sizeof(respuesta));
+                    		n = read(fd2,buf,sizeof(buf)); // Espera latido
+
                     		write(fd2, M2, sizeof(M2)); // Envia matriz asignada
                             write(fd, "$", 1); // Avisa cambio turno
                     	}
                     	else { // Sino, es aviso de ganador en contrincante
-                    		// Aviso de ganador en jugador 2, informa derrota a jugador 1
+                    		write(fd2, "Has perdido!", 12);
+                    		printf("Juego terminado. Finalizando...\n");
+                    		return;
                     	}
 
 		                if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
 		                    perror("semop v-post"); exit(1);
 	                    }
+	                    sleep(1); // Se duerme 1s para sincronia tuberia fd
 	                    /* Fin sección */
 		            } while ((n = read(fd,buf,sizeof(buf)))>0); // Espera nuevo turno (aviso desde proceso conexion 1)
 
@@ -258,16 +280,60 @@ int main(void){
 }
 
 /* genera espacios vacios, luego, establece los barcos dentro de la matriz */
-void generar_mapa_inicial(int *M, int dimension){
-
-	for(i=0;i<dimension;i++){
-		M[i]=0;
+void generar_mapa_inicial(char *M){
+    int i,k,r;
+	for(i=0;i<25;i++){
+		M[i]='-';
 	}
 	for(k=0;k<5;k++){
 		do{
-			r=rand() % dimension;
-		} while(M[r]==1);
-		M[r]=1;
+			r=rand() % 25;
+		} while(M[r]=='-');
+		M[r]='B';
 	}
 	return;
+}
+/* analiza coordenadas en buffer enviadas por jugador*/
+void analizar(char* buffer, char* M, char* respuesta) {
+	int y, posicionM, i;
+	char a, b;
+	a = buffer[0];
+	b = buffer[1];
+
+	y = b - '0'; //char a int
+	y = y--;
+
+	if(y>4 || y<0){
+		respuesta = "MISS!";
+		return;
+	}
+
+	switch(a) {
+		case 'a':
+		case 'A': posicionM = y;
+		    break;
+		case 'b':
+		case 'B': posicionM = y + 5;
+		    break;
+		case 'c':
+		case 'C': posicionM = y + 10;
+		    break;
+		case 'd':
+		case 'D': posicionM = y + 15;
+		    break;
+		case 'e':
+		case 'E': posicionM = y + 20;
+		    break;    
+		default: respuesta = "MISS!";
+		    return;         
+	}
+
+	if (M[posicionM] == 'B') {
+		M[posicionM] = '-';
+		respuesta = "HIT!";
+		return;
+	} else {
+		respuesta = "MISS!";
+		return;
+	}
 }
