@@ -31,34 +31,34 @@ int main (void){
 			exit(1);
 		} else {
 			printf("Conexion lograda - Jugador 2 - Preparando...\n");
-			write(fd, "aqui-cliente", 12);
+			write(fd, "aqui", 4);
 		}
 	} else {
 		printf("Conexion lograda - Jugador 1 - Preparando...\n");
 		contador++;
-		write(fd, "aqui-cliente", 12);
+		write(fd, "aqui", 4);
 	}
     //chmod(FIFOC1, 0000);
-
+    sleep(3);
     while((n = read(fd,buf,sizeof(buf)))>0) { // Lee mensajes desde el servidor, lo almacena en buf y retorna en número de bytes escritos
 
-		if(buf[0] == '$') { // Si es su turno (definimos el $ para indicar turno)
+		if(strncmp ("$", buf, 1) == 0) { // Si es su turno (definimos el $ para indicar turno)
 
 			printf("Es su turno!, ingrese su eleccion --------\n");
 			// Acciones para mostrar matriz juego (substring? o identificar quizá)
 			n = read(0,buf,sizeof(buf)); // Lee desde teclado el mensaje que se quiere enviar al servidor.
             write(fd,buf,n); // Si se recibe más de 0 bytes, se escribe en la tuberia (fd) lo almacenado en buf con n bytes
 
-		} else if (strcmp("HIT!", buf) == 0 || strcmp("MISS!", buf) == 0){
+		} else if (strncmp("HIT!", buf, 4) == 0 || strncmp("MISS!", buf, 5) == 0){
 
 			write(1,buf,n); // Escribe por pantalla
 			write(fd,"listo",n); //
 
-		} else if (strcmp("ganador", buf) == 0){
+		} else if (strncmp("ganador", buf, 7) == 0){
 			printf("HIT ganador! Has ganado!\n");
 		}
 		else { // Se envia la matriz de juego o un mensaje
-
+			printf("checking: %s\n", buf);
 			imprimirMatriz(buf);
 			if (contador == 1) {
 			    write(fd, "recibido", 8); // Avisa latido de la primera vez
@@ -66,6 +66,7 @@ int main (void){
 		    }
 		    printf("Espere su turno --------\n");
 		}
+		sleep(3);
 	}
 
 	close(fd);
