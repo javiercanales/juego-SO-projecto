@@ -37,7 +37,7 @@ void terminar2();
 static int fd, fd1, fd2;
 
 int main(void){
-    int n, i, semid;
+    int n, i, semid, contador=0;
     char M1[25]; // Se simula matriz como arreglo de tamaño 5*5 = 25
     char M2[25];
 
@@ -91,7 +91,7 @@ int main(void){
         // Acciones hijos
         if(fork()==0) {
 
-            switch(i) {
+            switch(i) { //Para identificar el set de instrucciones correspondiente a cada hijo
 
                 case 1: //Cliente 1 (jugador 1)
 
@@ -105,30 +105,28 @@ int main(void){
                         perror("open"); // Si falla, error
                         exit(1);
                     }
-                    printf("check 4\n");
+
                     signal(SIGINT, terminar1);
-                    printf("check 5\n");
+
                     n = read(fd1,buf,sizeof(buf)); // Se lee para detectar una conexion entrante (cliente) (un latido)
-                    printf("check 6\n");
+                    
                     if(strncmp ("aqui", buf, 4) == 0) { // Se evalua que el latido sea correcto 
                                                            // (podria requerir cambios este metodo, o mejoras, ir evaluando)
                         printf("Jugador 1 conectado!\n");
                     } else {
-                        printf("check 7\n");
+                        
                         printf("error, el buffer es: %s", buf);
                         exit(1);
                     }
-                    printf("check 8\n");
+                    
                     chmod(FIFOC1, 0000); // Una vez detectada conexion, se cambia permiso asignado a la tuberia, para que no entren mas clientes.
                     // Quiza sirva hacer el chmod 0000 en el cliente, habra que probar (seria mas eficiente para evitar errores)
                     /**
-                    * POR AQUI PODEMOS IR METIENDO SEÑALES PA AVISAR TURNOS
+                    * POR AQUI PODEMOS IR METIENDO SEÑALES PARA AVISAR TURNOS
                     * ONDA se definesignal(SIGALRM, cambioturno())
                     * luego se llama alarm(1) pa detonar cambioturno().
                     * MEJOR AUN, USAR raise pa lanzar SIGUSR. Ver codigo señal.c
                     */
-
-                    
 
                     printf("Esperando conexion cliente 2...\n");
                     n = read(fd,buf,sizeof(buf)); // Esperando respuesta proceso conexion cliente 2 (no debe ser critica porque debe estar en paralelo al otro proceso, esperando)
@@ -148,63 +146,41 @@ int main(void){
 
                     printf("Enviando matriz inicial a jugador 1 --------\n");
                     write(fd1, M1, sizeof(M1)); // Envia matriz asignada
-                    sleep(3);
-
-                    n = read(fd1, buf, sizeof(buf)); // Espera respuesta
-                    printf("Matriz enviada a jugador 1 --------\n");
-                    printf("Avisando nuevo turno jugador 1...\n");
-                    printf("Esperando coordenada jugador 1...\n");
-
-                    write(fd1, "$", 1); // Avisa turno inicial
-                    sleep(3);
-
-                    n = read(fd1, buf, sizeof(buf)); // Vuelve a esperar respuesta (1er turno)
-
-                    printf("Coordenada (1 vez) recibida de jugador 1, analizando  --------\n");
-                    analizar(buf, M1, respuesta);
-
-                    printf("Enviando respuesta a jugador 1 --------\n");
-                    write(fd1, respuesta, sizeof(respuesta));
-                    sleep(3);
-
-                    n = read(fd1, buf, sizeof(buf)); // Espera latido
-                    printf("Respuesta recibida en jugador 1 --------\n");
-
-                    printf("Enviando matriz a jugador 1 --------\n");
-                    write(fd1, M1, sizeof(M1)); // Envia matriz asignada
-
-                    printf("Aviso inicial a desde 1 a conexion de jugador 2 cambio turno --------\n");
-                    write(fd, "$", 1); // Avisa cambio turno
-
+                    
                     if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
                         perror("semop v-post"); exit(1);
                     }
                     printf("------------------------------------------------\n");
-                    sleep(3); // Se duerme 1s para sincronia tuberia fd
                     /* Fin sección */
 
                     while(TRUE) { 
                         /** Sección crítica
-                        * Se requiere sincronización por semáforo para el control de la lectura en la tuberia compartida/interna (fd)
-                        * Sin sincronización, podría leerse datos generados por sí mismo (procesos). Con la sincronización por semáforo,
-                        * se logra que cada proceso tenga acceso individual a la lectura (apoyados por sleep(3)). Uno libera el recurso, y el otro lo toma
-                        * inmediatamente, esencialmente para el read() (en este programa).
+                        * Se requiere sincronización por semáforo para el control de turnos
+                        * Sin sincronización, se generaria una corrupcion de turnos y fallaria.
+                        * Con la sincronización por semáforo, se logra que cada proceso tenga acceso
+                        * individual a la lectura. Uno libera el recurso, y el otro
+                        * lo toma inmediatamente (para el diseño de este código)
                         */
 
                         if(semop(semid, &p, 1) < 0) { // sem_wait()), ocupa el recurso y restringe operaciones en otros procesos (proceso conexion jugador 2)
                             perror("semop p-wait"); exit(1);
                         }
+                        if(contador > 0) {
+                            n = read(fd,buf,sizeof(buf)); // Si hubiese un mensaje de ganador en contrincante
+                        } else if(contador == 0) {
+                            sleep(5); //tiempo para que 1ra vez no choquen mensajes
+                            contador++; // La primera vez no lee
+                        }
 
-                        n = read(fd,buf,sizeof(buf)); // Si hubiese un mensaje de ganador en contrincante
                         if(strncmp("derrota", buf, 7) == 0) {
-                            write(fd1, "Has perdido!", 12);
+                            write(fd1, "perdedor", 12);
                             printf("Juego terminado. Finalizando...\n");
                             exit(0);
                         }
 
                         printf("Nuevo turno jugador 1 --------\n");
-                        write(fd1, "$", 1); // Avisa turno
-                        sleep(3);
+                        write(fd1, "turno", 5); // Avisa turno
+                        sleep(2);
 
                         printf("Esperando coordenada jugador 1 --------\n");
                         n = read(fd1,buf,sizeof(buf)); // Espera coordenada
@@ -213,8 +189,9 @@ int main(void){
                         analizar(buf, M1, respuesta);
 
                         printf("Enviando respuesta a jugador 1 --------\n");
+                        sleep(4);
                         write(fd1, respuesta, sizeof(respuesta));
-                        sleep(3);
+                        sleep(2);
 
                         printf("Esperando confirmacion jugador 1 --------\n");
                         n = read(fd1,buf,sizeof(buf)); // Espera latido
@@ -225,8 +202,9 @@ int main(void){
                         if(strncmp("ganador", respuesta, 7) == 0){
                             printf("Informando triunfo de jugador 1 a jugador 2 --------\n");
                             write(fd, "derrota", 7); // Avisa a jugador 2 su derrota
+                            exit(0);
                         } else {
-                            write(fd, "nada", 7); // Mensaje para que el read() fd inicial no espere 
+                            write(fd, "nada", 4); // Mensaje para que el read() fd inicial no espere 
                         }
 
                         if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
@@ -234,7 +212,7 @@ int main(void){
                         }
 
                         printf("------------------------------------------------\n");
-                        sleep(3); // Se duerme 3s para sincronia tuberia fd
+                        sleep(2); // Se duerme 3s para sincronizar turnos
                         /* Fin sección */
                     }
                     break;
@@ -279,59 +257,68 @@ int main(void){
                         perror("semop v-post"); exit(1);
                     }
                     /* Fin sección */
-                    sleep(3); // Se duerme 1s para sincronia tuberia fd
+                    sleep(2); // Se duerme para testear
                    
                     while(TRUE) { 
+                        
+                        if(contador == 0) {
+                            n = read(fd,buf,sizeof(buf)); // (1 vez)Si hubiese un mensaje
+                        }
                         /** Sección crítica
-                        * Se requiere sincronización por semáforo para el control de la lectura en la tuberia compartida/interna (fd)
-                        * Sin sincronización, podría leerse datos generados por sí mismo (procesos). Con la sincronización por semáforo,
-                        * se logra que cada proceso tenga acceso individual a la lectura. Uno libera el recurso, y el otro lo toma
-                        * inmediatamente, esencialmente para el read() (en este programa).
+                        * Se requiere sincronización por semáforo para el control de turnos
+                        * Sin sincronización, se generaria una corrupcion de turnos y fallaria.
+                        * Con la sincronización por semáforo, se logra que cada proceso tenga acceso
+                        * individual a la lectura. Uno libera el recurso, y el otro
+                        * lo toma inmediatamente (para el diseño de este código)
                         */
                         if(semop(semid, &p, 1) < 0) { // sem_wait()), ocupa el recurso y restringe operaciones en otros procesos (proceso conexion jugador 2)
                             perror("semop p-wait"); exit(1);
                         }
                         
-                        n = read(fd,buf,sizeof(buf)); // Si hubiese un mensaje de ganador en contrincante
+                        if(contador>0) {
+                            n = read(fd,buf,sizeof(buf)); // (resto veces)Si hubiese un mensaje de ganador en contrincante
+                        }
                         if(strncmp("derrota", buf, 7) == 0) { // Aviso de ganador en contrincante
-                            write(fd2, "Has perdido!", 12);
+                            write(fd2, "perdedor", 12);
                             printf("Juego terminado. Finalizando...\n");
                             exit(0);
                         }
 
                         printf("Nuevo turno jugador 2 --------\n");
-                        write(fd2, "$", 1); // Avisa turno inicial
-                        sleep(3);
+                        write(fd2, "turno", 5); // Avisa turno
+                        sleep(2);
 
                         printf("Esperando coordenada jugador 2 --------\n");
                         n = read(fd2,buf,sizeof(buf)); // Espera respuesta
 
                         printf("Coordenada recibida de jugador 2, analizando  --------\n");
                         analizar(buf, M2, respuesta);
+
                         printf("Enviando respuesta a jugador 2 --------\n");
+                        sleep(4);
                         write(fd2, respuesta, sizeof(respuesta));
-                        sleep(3);
+                        sleep(2);
 
                         printf("Esperando confirmacion jugador 2 --------\n");
                         n = read(fd2,buf,sizeof(buf)); // Espera latido
 
                         printf("Enviando matriz jugador 2 --------\n");
                         write(fd2, M2, sizeof(M2)); // Envia matriz asignada
-                        sleep(3);
 
                         if (strncmp("ganador", respuesta, 7) == 0){
                             printf("Informando triunfo de jugador 2 a jugador 1 --------\n");
                             write(fd, "derrota", 7); // Avisa derrota
                             exit(0);
                         } else {
-                            write(fd, "nada", 7); // Mensaje para que el read() fd inicial no espere 
+                            write(fd, "nada", 4); // Mensaje para que el read() fd inicial no espere 
                         }
 
                         if(semop(semid, &v, 1) < 0) { // Se libera el recurso para que otro proceso lo pueda ocupar (proceso conexion jugador 2)
                             perror("semop v-post"); exit(1);
                         }
                         printf("------------------------------------------------\n");
-                        sleep(3); // Se duerme
+                        contador++;
+                        sleep(2); // Se duerme 3s para sincronizar turnos
                         /* Fin sección */
                     }
 
@@ -344,9 +331,8 @@ int main(void){
 
     }
 
-    // Acciones padre (Control general partida del servidor) --- no se requiere derivar de un "else" del "if (fork() == 0)"
-    // (como hemos hecho en ejemplos) pues los hijos nunca llegarán aquí (por diseño general del código)
-    // Por ahora no se define nada, se revisará si es necesario (aplicar nueva tuberia quizá, o esperar a hijos con wait NULL)
+    
+    // Espera a los hijos, solo para probar
     for(i=0; i<2; i++) {
         wait(NULL);
     }
@@ -419,7 +405,7 @@ void analizar(char* buffer, char* M, char* respuesta) {
             }
         }
         if(contador==0){
-            printf("TENEMOS GANADOR!\n");
+            printf("TENEMOS GANADOR!!!\n");
             strcpy(respuesta, "ganador");
         }
     }
